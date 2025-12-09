@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8" />
+  <title>Upload & Chat</title>
+</head>
+<body>
+  <h1>Upload billede</h1>
+  <input type="file" id="fileInput" />
+  <button onclick="uploadFile()">Upload</button>
+  <p id="status"></p>
+  <img id="preview" style="max-width: 300px; margin-top: 10px;" />
+
+  <hr />
+
+  <h1>Chat med AI</h1>
+  <textarea id="chatInput" placeholder="Skriv din besked her..." rows="4" cols="50"></textarea><br />
+  <button onclick="sendMessage()">Send</button>
+  <p id="chatResponse" style="margin-top: 10px; font-weight: bold;"></p>
+
+  <script>
+    async function uploadFile() {
+      const file = document.getElementById("fileInput").files[0];
+      const status = document.getElementById("status");
+      const preview = document.getElementById("preview");
+
+      if (!file) {
+        status.innerText = "Ingen fil valgt.";
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      try {
+        const res = await fetch("http://localhost:5000/upload", {
+          method: "POST",
+          body: formData
+        });
+
+        const data = await res.json();
+        status.innerText = data.message;
+        preview.src = `http://localhost:5000/uploads/${data.filename}`;
+      } catch (error) {
+        status.innerText = "Fejl ved upload.";
+        console.error(error);
+      }
+    }
+
+    async function sendMessage() {
+      const inputElement = document.getElementById("chatInput");
+      const responseBox = document.getElementById("chatResponse");
+
+      if (!inputElement || !responseBox) return;
+
+      const input = inputElement.value;
+
+      if (!input.trim()) {
+        responseBox.innerText = "Skriv noget først.";
+        return;
+      }
+
+      try {
+        const res = await fetch("http://localhost:5000/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: input })
+        });
+
+        const data = await res.json();
+        responseBox.innerText = data.reply;
+      } catch (error) {
+        responseBox.innerText = "Fejl ved chat.";
+        console.error(error);
+      }
+    }
+  </script>
+</body>
+</html>

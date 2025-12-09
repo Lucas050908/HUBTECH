@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <title>Calendar with colors and notes</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(to right, #1f1f2f, #2a2a3d);
+      color: #f0f0f0;
+    }
+
+    h1 {
+      text-align: center;
+      padding: 1em;
+      background: linear-gradient(to right, #6a11cb, #2575fc);
+      color: white;
+      margin: 0;
+      font-size: 2em;
+    }
+
+    .calendar-container {
+      max-width: 900px;
+      margin: 2em auto;
+      padding: 2em;
+      background-color: #2b2b3c;
+      border-radius: 12px;
+    }
+
+    .month-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1em;
+    }
+
+    .month-title {
+      font-size: 1.8em;
+      text-align: center;
+      flex: 1;
+      color: #00f2ff;
+    }
+
+    .month-header button {
+      background: #00c6ff;
+      color: #000;
+      border: none;
+      padding: 10px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      text-align: center;
+      font-weight: bold;
+      margin-bottom: 10px;
+      color: #bbb;
+    }
+
+    .calendar {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 8px;
+    }
+
+    .day {
+      background-color: #3a3a4f;
+      border: 1px solid #555;
+      padding: 1em;
+      min-height: 80px;
+      border-radius: 10px;
+      cursor: pointer;
+      position: relative;
+      color: #fff;
+      transition: background-color 0.2s ease;
+    }
+
+    .day:hover {
+      background-color: #505070;
+    }
+
+    .note {
+      font-size: 12px;
+      color: #ccc;
+      margin-top: 5px;
+      white-space: pre-wrap;
+    }
+
+    .red { background-color: #ff4c4c !important; }
+    .blue { background-color: #2196f3 !important; }
+    .green { background-color: #4caf50 !important; }
+
+    #modal, #overlay {
+      display: none;
+      position: fixed;
+      z-index: 10;
+    }
+
+    #overlay {
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.6);
+      z-index: 5;
+    }
+
+    #modal {
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: #1e1e2f;
+      padding: 2em;
+      border-radius: 12px;
+      width: 320px;
+      color: #fff;
+    }
+
+    #modal textarea, #modal select {
+      width: 100%;
+      margin-top: 10px;
+      font-size: 14px;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #888;
+      background-color: #2a2a3d;
+      color: #fff;
+    }
+
+    #modal button {
+      margin-top: 15px;
+      padding: 10px 14px;
+      background: #00c6ff;
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    #modal button:hover {
+      background: #00bcd4;
+    }
+  </style>
+</head>
+<body>
+  <h1>Calendar with colors and notes</h1>
+  <div class="calendar-container">
+    <div class="month-header">
+      <button onclick="changeMonth(-1)">←</button>
+      <div class="month-title" id="monthTitle"></div>
+      <button onclick="changeMonth(1)">→</button>
+    </div>
+    <div class="weekdays">
+      <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
+    </div>
+    <div class="calendar" id="calendar"></div>
+  </div>
+
+  <div id="overlay"></div>
+  <div id="modal">
+    <h3 id="modalDate">Date</h3>
+    <textarea id="noteInput" placeholder="Type your note here..."></textarea>
+    <select id="colorInput">
+      <option value="">No color</option>
+      <option value="red">🔴 Submitting</option>
+      <option value="blue">🔵 Birthday</option>
+      <option value="green">🟢 Personal appointment</option>
+    </select>
+    <button onclick="saveNote()">Save</button>
+  </div>
+
+  <script>
+    const calendar = document.getElementById('calendar');
+    const modal = document.getElementById('modal');
+    const overlay = document.getElementById('overlay');
+    const modalDate = document.getElementById('modalDate');
+    const noteInput = document.getElementById('noteInput');
+    const colorInput = document.getElementById('colorInput');
+    const monthTitle = document.getElementById('monthTitle');
+
+    let currentYear = new Date().getFullYear();
+    let currentMonth = new Date().getMonth();
+    let selectedDate = '';
+
+    function generateCalendar(year, month) {
+      calendar.innerHTML = '';
+      const firstDay = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+      monthTitle.textContent = `${monthNames[month]} ${year}`;
+
+      const startOffset = (firstDay + 6) % 7;
+      for (let i = 0; i < startOffset; i++) {
+        const blank = document.createElement('div');
+        calendar.appendChild(blank);
+      }
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${year}-${month + 1}-${day}`;
+        const div = document.createElement('div');
+        div.className = 'day';
+        div.textContent = day;
+        div.onclick = () => openModal(dateStr);
+
+        const saved = JSON.parse(localStorage.getItem(dateStr) || '{}');
+        if (saved.note) {
+          const note = document.createElement('div');
+          note.className = 'note';
+          note.textContent = saved.note;
+          div.appendChild(note);
+        }
+        if (saved.color) {
+          div.classList.add(saved.color);
+        }
+
+        calendar.appendChild(div);
+      }
+    }
+
+    function changeMonth(offset) {
+      currentMonth += offset;
+      if (currentMonth < 0) {
+        currentMonth = 11;
+        currentYear--;
+      } else if (currentMonth > 11) {
+        currentMonth = 0;
+        currentYear++;
+      }
+      generateCalendar(currentYear, currentMonth);
+    }
+
+    function openModal(dateStr) {
+      selectedDate = dateStr;
+      const saved = JSON.parse(localStorage.getItem(dateStr) || '{}');
+      modalDate.textContent = `Note for ${dateStr}`;
+      noteInput.value = saved.note || '';
+      colorInput.value = saved.color || '';
+      modal.style.display = 'block';
+      overlay.style.display = 'block';
+    }
+
+    function saveNote() {
+      const note = noteInput.value;
+      const color = colorInput.value;
+      localStorage.setItem(selectedDate, JSON.stringify({ note, color }));
+      modal.style.display = 'none';
+      overlay.style.display = 'none';
+      generateCalendar(currentYear, currentMonth);
+    }
+
+    overlay.onclick = () => {
+      modal.style.display = 'none';
+      overlay.style.display = 'none';
+    };
+
+    generateCalendar(currentYear, currentMonth);
+  </script>
+</body>
+</html>
