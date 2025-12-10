@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="da">
 <head>
@@ -142,6 +143,20 @@
     #modal button:hover {
       background: #00bcd4;
     }
+
+    /* --- NYT: Fremhæv dagens dato med lysegrøn skrift og kant --- */
+    .today {
+      color: #90ee90 !important;     /* lysegrøn tekst */
+      border: 2px solid #90ee90;     /* lysegrøn kant */
+    }
+    /*
+    Hvis du vil have en lysegrøn BAGGRUND i stedet:
+    .today {
+      background-color: rgba(144, 238, 144, 0.2) !important;
+      color: #f0fff0 !important;
+      border: 2px solid #90ee90;
+    }
+    */
   </style>
 </head>
 <body>
@@ -204,6 +219,11 @@
         div.textContent = day;
         div.onclick = () => openModal(dateStr);
 
+        /* --- NYT: fremhæv dagens dato med lysegrøn skrift/kant --- */
+        if (isToday(year, month, day)) {
+          div.classList.add('today');
+        }
+
         const saved = JSON.parse(localStorage.getItem(dateStr) || '{}');
         if (saved.note) {
           const note = document.createElement('div');
@@ -255,7 +275,33 @@
       overlay.style.display = 'none';
     };
 
+    /* --- NYT: Hjælpefunktion til at afgøre om en celle er "i dag" --- */
+    function isToday(year, monthZeroBased, day) {
+      const today = new Date();
+      return (
+        today.getFullYear() === year &&
+        today.getMonth() === monthZeroBased &&
+        today.getDate() === day
+      );
+    }
+
+    /* --- NYT: Opdater automatisk ved midnat, så markeringen flytter sig --- */
+    function scheduleMidnightRefresh() {
+      const now = new Date();
+      const tomorrow = new Date(now);
+      tomorrow.setDate(now.getDate() + 1);
+      tomorrow.setHours(0, 0, 0, 0);
+      const msToMidnight = tomorrow - now;
+      setTimeout(() => {
+        // hvis brugeren står på en anden måned end den aktuelle, vil "today" først være synlig ved navigation
+        generateCalendar(currentYear, currentMonth);
+        scheduleMidnightRefresh(); // planlæg næste opdatering
+      }, msToMidnight);
+    }
+
+    // Initial rendering og start midnats-opdatering
     generateCalendar(currentYear, currentMonth);
+    scheduleMidnightRefresh();
   </script>
 </body>
 </html>
