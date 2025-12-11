@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mini PowerPoint - Editor</title>
+  <style>
+    :root{--accent:#2d6cdf;--bg:#f4f7fb;--card:#fff}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter, Arial, Helvetica, sans-serif;background:var(--bg);color:#222}
+    .app{max-width:1100px;margin:24px auto;padding:18px}
+    header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+    header h1{font-size:20px;margin:0}
+
+    .workspace{display:grid;grid-template-columns:240px 1fr 320px;gap:18px}
+
+    /* Left: slides list */
+    .left{background:var(--card);padding:12px;border-radius:10px;box-shadow:0 6px 18px rgba(20,30,60,0.08)}
+    .slides-list{display:flex;flex-direction:column;gap:10px;max-height:60vh;overflow:auto;padding:6px}
+    .thumb{display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;cursor:pointer;border:1px solid transparent}
+    .thumb.active{background:#eef5ff;border-color:var(--accent)}
+    .thumb .meta{flex:1}
+    .thumb h4{margin:0;font-size:14px}
+    .thumb p{margin:2px 0 0;font-size:12px;color:#555}
+    .left .controls{display:flex;gap:8px;margin-top:10px}
+    .btn{padding:8px 10px;border-radius:8px;border:none;background:var(--accent);color:white;cursor:pointer}
+    .btn.ghost{background:transparent;color:var(--accent);border:1px solid rgba(45,108,223,0.12)}
+
+    /* Center: preview */
+    .center{background:var(--card);padding:18px;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:420px;box-shadow:0 6px 18px rgba(20,30,60,0.06)}
+    .stage{width:740px;height:420px;background:linear-gradient(180deg,#fff,#fbfdff);border:1px solid #e6eefc;border-radius:6px;position:relative;overflow:hidden;display:flex;align-items:flex-start;justify-content:center}
+    .slide-view{width:100%;height:100%;padding:28px;position:absolute;left:0;top:0;opacity:0;transform:translateX(24px);transition:opacity .45s ease,transform .45s ease}
+    .slide-view.active{opacity:1;transform:translateX(0)}
+    .slide-title{font-size:28px;margin:0 0 8px}
+    .slide-body{font-size:16px;color:#333}
+
+    /* Right: editor */
+    .right{background:var(--card);padding:12px;border-radius:10px;box-shadow:0 6px 18px rgba(20,30,60,0.06)}
+    .field{margin-bottom:10px}
+    label{display:block;font-size:13px;margin-bottom:6px;color:#333}
+    input[type=text]{width:100%;padding:8px;border-radius:6px;border:1px solid #d7e0f5}
+    textarea{width:100%;min-height:120px;padding:8px;border-radius:6px;border:1px solid #d7e0f5}
+    select{width:100%;padding:8px;border-radius:6px;border:1px solid #d7e0f5}
+
+    .small{font-size:13px;color:#555}
+    .row{display:flex;gap:8px}
+    .export{margin-top:12px}
+    .hint{font-size:12px;color:#666;margin-top:6px}
+
+    /* templates */
+    .templates{display:flex;gap:8px;flex-wrap:wrap}
+    .template{padding:8px;border-radius:8px;border:1px solid #e6eefc;cursor:pointer;font-size:13px}
+
+    footer{margin-top:14px;text-align:right;color:#666;font-size:13px}
+
+    /* Responsive */
+    @media (max-width:1000px){.workspace{grid-template-columns:1fr;grid-auto-rows:auto}.center{order:3}.left{order:1}.right{order:2}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Mini PowerPoint - Editor</h1>
+      <div class="small">Lav, rediger og eksportér slides direkte i browseren</div>
+    </header>
+
+    <div class="workspace">
+      <aside class="left">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <strong>Slides</strong>
+          <div class="small">Gemret: <span id="saved-status">Ingen</span></div>
+        </div>
+
+        <div class="slides-list" id="slidesList"></div>
+
+        <div class="controls">
+          <button class="btn" id="addBtn">+ Tilføj slide</button>
+          <button class="btn ghost" id="duplicateBtn">Duplicate</button>
+          <button class="btn ghost" id="deleteBtn">Slet</button>
+        </div>
+
+        <div class="hint">Tip: Klik på en slide for at redigere. Træk ikke nødvendigt for denne simple version.</div>
+      </aside>
+
+      <main class="center">
+        <div class="stage" id="stage">
+          <!-- slides rendered here -->
+        </div>
+
+        <div style="margin-top:12px;width:100%;display:flex;justify-content:space-between;align-items:center">
+          <div class="row">
+            <button class="btn" id="prevBtn">Forrige</button>
+            <button class="btn" id="nextBtn">Næste</button>
+            <button class="btn ghost" id="presentBtn">Start præsentation</button>
+          </div>
+
+          <div class="small">Brug piletaster ⬅️ ➡️ til navigation</div>
+        </div>
+      </main>
+
+      <aside class="right">
+        <div class="field">
+          <label>Titel</label>
+          <input type="text" id="titleInput" placeholder="Skriv titel her" />
+        </div>
+
+        <div class="field">
+          <label>Indhold</label>
+          <textarea id="bodyInput" placeholder="Skriv din tekst her"></textarea>
+        </div>
+
+        <div class="field">
+          <label>Layout / Skabelon</label>
+          <select id="layoutSelect">
+            <option value="title">Titel Slide</option>
+            <option value="bullet">Punktliste</option>
+            <option value="image">Billede + tekst</option>
+            <option value="two">To kolonner</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Transition</label>
+          <select id="transitionSelect">
+            <option value="slide">Slide</option>
+            <option value="fade">Fade</option>
+            <option value="none">Ingen</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Templates</label>
+          <div class="templates">
+            <div class="template" data-template="title">Titel</div>
+            <div class="template" data-template="bullet">Punkter</div>
+            <div class="template" data-template="image">Billede</div>
+            <div class="template" data-template="two">To kolonner</div>
+          </div>
+        </div>
+
+        <div class="export">
+          <button class="btn" id="saveBtn">Gem (local)</button>
+          <button class="btn ghost" id="exportBtn">Eksportér HTML</button>
+        </div>
+
+        <footer>
+          <div class="small">Autosave: ja. Data gemmes i din browser.</div>
+        </footer>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    // Simple slide model and app state
+    let slides = [];
+    let current = 0;
+
+    const defaultSlide = (i=1)=>({title:`Slide ${i}`,body:`Skriv noget her for slide ${i}`,layout:'title',transition:'slide'});
+
+    // Elements
+    const slidesList = document.getElementById('slidesList');
+    const stage = document.getElementById('stage');
+    const titleInput = document.getElementById('titleInput');
+    const bodyInput = document.getElementById('bodyInput');
+    const layoutSelect = document.getElementById('layoutSelect');
+    const transitionSelect = document.getElementById('transitionSelect');
+    const savedStatus = document.getElementById('saved-status');
+
+    // Init: load from localStorage or create 3 slides
+    function load(){
+      const raw = localStorage.getItem('mini_pp_slides');
+      if(raw){
+        try{slides = JSON.parse(raw);}catch(e){slides=[defaultSlide(1),defaultSlide(2),defaultSlide(3)];}
+      }else{
+        slides=[defaultSlide(1),defaultSlide(2),defaultSlide(3)];
+      }
+      renderList();
+      renderStage();
+      selectSlide(0);
+      savedStatus.textContent = 'OK';
+    }
+
+    function save(){
+      localStorage.setItem('mini_pp_slides',JSON.stringify(slides));
+      savedStatus.textContent = new Date().toLocaleTimeString();
+    }
+
+    // Slides list UI
+    function renderList(){
+      slidesList.innerHTML='';
+      slides.forEach((s,i)=>{
+        const el=document.createElement('div');
+        el.className='thumb'+(i===current?' active':'');
+        el.innerHTML=`<div class=meta><h4>${escapeHtml(s.title||'Untitled')}</h4><p>${(s.layout||'').toUpperCase()} · ${(s.transition||'')} </p></div>`;
+        el.onclick=()=>selectSlide(i);
+        slidesList.appendChild(el);
+      });
+    }
+
+    // Stage preview
+    function renderStage(){
+      stage.innerHTML='';
+      slides.forEach((s,i)=>{
+        const el=document.createElement('div');
+        el.className='slide-view'+(i===current?' active':'');
+        el.dataset.index=i;
+        // Build content based on layout
+        const html = buildSlideHtml(s);
+        el.innerHTML = html;
+        stage.appendChild(el);
+      });
+    }
+
+    function buildSlideHtml(s){
+      if(!s) return '';
+      const t = escapeHtml(s.title||'');
+      const b = escapeHtml(s.body||'');
+      switch(s.layout){
+        case 'title': return `<div style="padding:24px"><h2 class='slide-title'>${t}</h2><div class='slide-body'>${b}</div></div>`;
+        case 'bullet': return `<div style="padding:20px"><h3 class='slide-title'>${t}</h3><div class='slide-body'><ul>${b.split('
+').map(li=>`<li>${li}</li>`).join('')}</ul></div></div>`;
+        case 'image': return `<div style="display:flex;height:100%"><div style="flex:1;padding:20px"><h3 class='slide-title'>${t}</h3><div class='slide-body'>${b}</div></div><div style="width:40%;background:#f2f6ff;display:flex;align-items:center;justify-content:center;padding:12px">BILLEDE-PLADS</div></div>`;
+        case 'two': return `<div style="display:flex;gap:12px;padding:20px"><div style="flex:1"><h3 class='slide-title'>${t}</h3><div class='slide-body'>${b.split('
+
+')[0]||''}</div></div><div style="flex:1;background:#fbfdff;padding:12px;border-left:1px solid #eef5ff">${b.split('
+
+')[1]||''}</div></div>`;
+        default: return `<div style="padding:24px"><h3>${t}</h3><div>${b}</div></div>`;
+      }
+    }
+
+    function selectSlide(i){
+      if(i<0||i>=slides.length) return;
+      current=i;
+      // populate editor
+      const s=slides[current];
+      titleInput.value=s.title||'';
+      bodyInput.value=s.body||'';
+      layoutSelect.value=s.layout||'title';
+      transitionSelect.value=s.transition||'slide';
+      renderList();
+      renderStage();
+    }
+
+    // CRUD
+    document.getElementById('addBtn').addEventListener('click',()=>{
+      const newSlide = defaultSlide(slides.length+1);
+      slides.push(newSlide);
+      selectSlide(slides.length-1);
+      save();
+    });
+
+    document.getElementById('duplicateBtn').addEventListener('click',()=>{
+      const s = JSON.parse(JSON.stringify(slides[current]));
+      slides.splice(current+1,0,s);
+      selectSlide(current+1);
+      save();
+    });
+
+    document.getElementById('deleteBtn').addEventListener('click',()=>{
+      if(slides.length===1) return alert('Kan ikke slette sidste slide');
+      slides.splice(current,1);
+      selectSlide(Math.max(0,current-1));
+      save();
+    });
+
+    // Editor inputs -> model
+    titleInput.addEventListener('input',()=>{
+      slides[current].title = titleInput.value;
+      renderList(); renderStage();
+    });
+    bodyInput.addEventListener('input',()=>{
+      slides[current].body = bodyInput.value;
+      renderStage();
+    });
+    layoutSelect.addEventListener('change',()=>{slides[current].layout=layoutSelect.value;renderStage();renderList();});
+    transitionSelect.addEventListener('change',()=>{slides[current].transition=transitionSelect.value;renderStage();renderList();});
+
+    // Templates
+    document.querySelectorAll('.template').forEach(t=>t.addEventListener('click',e=>{
+      const type=e.currentTarget.dataset.template;
+      switch(type){
+        case 'title': slides[current].layout='title';slides[current].title='Titel her';slides[current].body='Undertitel eller forklaring';break;
+        case 'bullet': slides[current].layout='bullet';slides[current].title='Punkter';slides[current].body='Punkt 1
+Punkt 2
+Punkt 3';break;
+        case 'image': slides[current].layout='image';slides[current].title='Billede slide';slides[current].body='Beskrivelse til billedet';break;
+        case 'two': slides[current].layout='two';slides[current].title='Sammenligning';slides[current].body='Kolonne 1 tekst
+
+Kolonne 2 tekst';break;
+      }
+      renderStage();renderList();
+    }));
+
+    // Navigation
+    document.getElementById('nextBtn').addEventListener('click',()=>{if(current<slides.length-1)selectSlide(current+1)});
+    document.getElementById('prevBtn').addEventListener('click',()=>{if(current>0)selectSlide(current-1)});
+
+    // Keyboard arrows
+    document.addEventListener('keydown',e=>{
+      if(e.key==='ArrowRight'){ if(current<slides.length-1) selectSlide(current+1); }
+      if(e.key==='ArrowLeft'){ if(current>0) selectSlide(current-1); }
+      if(e.key==='Delete'){ /* optional delete */ }
+    });
+
+    // Present (fullscreen-like)
+    document.getElementById('presentBtn').addEventListener('click',()=>{
+      openPresentView();
+    });
+
+    function openPresentView(){
+      // simple full-page presentation overlay
+      const overlay = document.createElement('div');
+      overlay.style.position='fixed';overlay.style.left=0;overlay.style.top=0;overlay.style.right=0;overlay.style.bottom=0;overlay.style.background='#000b';overlay.style.display='flex';overlay.style.alignItems='center';overlay.style.justifyContent='center';overlay.style.zIndex=9999;
+      overlay.addEventListener('click',()=>document.body.removeChild(overlay));
+
+      const frame = document.createElement('div');frame.style.width='90%';frame.style.height='80%';frame.style.background='#fff';frame.style.borderRadius='6px';frame.style.overflow='hidden';frame.style.position='relative';
+      overlay.appendChild(frame);
+
+      let idx = current;
+      function render(){frame.innerHTML = '';
+        const slide = slides[idx];
+        const el = document.createElement('div');el.style.padding='36px';el.style.height='100%';el.style.display='flex';el.style.alignItems='flex-start';el.style.justifyContent='center';el.innerHTML = buildSlideHtml(slide);
+        frame.appendChild(el);
+      }
+      function next(){ if(idx<slides.length-1){idx++;render()} }
+      function prev(){ if(idx>0){idx--;render()} }
+
+      render();
+      document.body.appendChild(overlay);
+      // keyboard in overlay
+      const keyHandler = (e)=>{ if(e.key==='ArrowRight') next(); if(e.key==='ArrowLeft') prev(); if(e.key==='Escape'){ document.body.removeChild(overlay); document.removeEventListener('keydown',keyHandler);} };
+      document.addEventListener('keydown',keyHandler);
+    }
+
+    // Export HTML
+    document.getElementById('exportBtn').addEventListener('click',()=>{
+      const doc = generateExportHtml();
+      const blob = new Blob([doc],{type:'text/html'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');a.href=url;a.download='presentation.html';a.click();URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('saveBtn').addEventListener('click',save);
+
+    // Build export HTML (simple)
+    function generateExportHtml(){
+      const slidesHtml = slides.map(s=>`<section class="slide" data-transition="${s.transition}">${buildSlideHtml(s)}</section>`).join('
+');
+      return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Exporteret præsentation</title><style>body{margin:0;background:#f4f7fb;font-family:Arial}main{width:960px;margin:30px auto}section.slide{width:100%;min-height:420px;padding:36px;background:#fff;border:1px solid #e6eefc;margin-bottom:18px;border-radius:6px}</style></head><body><main>${slidesHtml}</main><script>let i=0;document.addEventListener('keydown',e=>{if(e.key==='ArrowRight'){i=Math.min(i+1,document.querySelectorAll('.slide').length-1);document.querySelectorAll('.slide')[i].scrollIntoView({behavior:'smooth'})}if(e.key==='ArrowLeft'){i=Math.max(0,i-1);document.querySelectorAll('.slide')[i].scrollIntoView({behavior:'smooth'})}})</script></body></html>`;
+    }
+
+    // Helpers
+    function escapeHtml(text){ if(!text) return ''; return text.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;'); }
+
+    // init
+    load();
+
+    // autosave on changes
+    let autosaveTimer=null;
+    ['input','change'].forEach(evt=>document.addEventListener(evt,()=>{clearTimeout(autosaveTimer);autosaveTimer=setTimeout(()=>{save();},800);}));
+  </script>
+</body>
+</html>
