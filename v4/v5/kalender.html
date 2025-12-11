@@ -29,6 +29,21 @@
       border-radius: 12px;
     }
 
+    .topbar {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 1em;
+    }
+
+    .topbar input {
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid #888;
+      background-color: #2a2a3d;
+      color: #fff;
+    }
+
     .month-header {
       display: flex;
       justify-content: space-between;
@@ -114,13 +129,20 @@
       background: #1e1e2f;
       padding: 2em;
       border-radius: 12px;
-      width: 320px;
+      width: 360px;
       color: #fff;
     }
 
-    #modal textarea, #modal select {
-      width: 100%;
+    #modal label {
+      display: block;
       margin-top: 10px;
+      font-size: 14px;
+      color: #ddd;
+    }
+
+    #modal textarea, #modal select, #modal input {
+      width: 100%;
+      margin-top: 6px;
       font-size: 14px;
       padding: 10px;
       border-radius: 6px;
@@ -144,24 +166,40 @@
       background: #00bcd4;
     }
 
-    /* --- NYT: Fremhæv dagens dato med lysegrøn skrift og kant --- */
+    /* Fremhæv dagens dato med lysegrøn skrift og kant */
     .today {
-      color: #90ee90 !important;     /* lysegrøn tekst */
-      border: 2px solid #90ee90;     /* lysegrøn kant */
-    }
-    /*
-    Hvis du vil have en lysegrøn BAGGRUND i stedet:
-    .today {
-      background-color: rgba(144, 238, 144, 0.2) !important;
-      color: #f0fff0 !important;
+      color: #90ee90 !important;
       border: 2px solid #90ee90;
     }
-    */
+
+    /* Lille badge, der viser synlighed i dagscellen */
+    .vis-badge {
+      position: absolute;
+      top: 6px;
+      right: 8px;
+      font-size: 11px;
+      color: #bbb;
+      background: rgba(0,0,0,0.3);
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+
+    .hidden-note {
+      font-size: 12px;
+      color: #888;
+      margin-top: 6px;
+      font-style: italic;
+    }
   </style>
 </head>
 <body>
   <h1>Calendar with colors and notes</h1>
   <div class="calendar-container">
+    <div class="topbar">
+      <label for="currentUser">Aktuel bruger:</label>
+      <input id="currentUser" type="text" placeholder="Fx Magnus eller email" />
+    </div>
+
     <div class="month-header">
       <button onclick="changeMonth(-1)">←</button>
       <div class="month-title" id="monthTitle"></div>
@@ -176,13 +214,28 @@
   <div id="overlay"></div>
   <div id="modal">
     <h3 id="modalDate">Date</h3>
+
+    <label for="noteInput">Note</label>
     <textarea id="noteInput" placeholder="Type your note here..."></textarea>
+
+    <label for="colorInput">Farve</label>
     <select id="colorInput">
       <option value="">No color</option>
       <option value="red">🔴 Submitting</option>
       <option value="blue">🔵 Birthday</option>
       <option value="green">🟢 Personal appointment</option>
     </select>
+
+    <label for="visibilityInput">Synlighed</label>
+    <select id="visibilityInput">
+      <option value="public">Offentlig (alle kan se)</option>
+      <option value="private">Privat (kun ejer)</option>
+      <option value="custom">Tilpasset (kun valgte)</option>
+    </select>
+
+    <label for="viewersInput">Tilladte seere (komma-separeret: navn eller email)</label>
+    <input id="viewersInput" type="text" placeholder="Fx: Magnus, anna@firma.dk" />
+
     <button onclick="saveNote()">Save</button>
   </div>
 
@@ -193,11 +246,28 @@
     const modalDate = document.getElementById('modalDate');
     const noteInput = document.getElementById('noteInput');
     const colorInput = document.getElementById('colorInput');
+    const visibilityInput = document.getElementById('visibilityInput');
+    const viewersInput = document.getElementById('viewersInput');
     const monthTitle = document.getElementById('monthTitle');
+    const currentUserInput = document.getElementById('currentUser');
 
     let currentYear = new Date().getFullYear();
     let currentMonth = new Date().getMonth();
     let selectedDate = '';
+
+    // --- INIT: Aktuel bruger fra URL eller localStorage
+    function initCurrentUser() {
+      const params = new URLSearchParams(window.location.search);
+      const fromUrl = params.get('user');
+      const savedUser = localStorage.getItem('__currentUser__');
+      const resolved = fromUrl || savedUser || '';
+      currentUserInput.value = resolved;
+    }
+
+    currentUserInput.addEventListener('input', () => {
+      localStorage.setItem('__currentUser__', currentUserInput.value.trim());
+      generateCalendar(currentYear, currentMonth);
+    });
 
     function generateCalendar(year, month) {
       calendar.innerHTML = '';
@@ -206,7 +276,7 @@
       const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
       monthTitle.textContent = `${monthNames[month]} ${year}`;
 
-      const startOffset = (firstDay + 6) % 7;
+      const startOffset = (firstDay + 6) % 7; // mandagsstart
       for (let i = 0; i < startOffset; i++) {
         const blank = document.createElement('div');
         calendar.appendChild(blank);
@@ -219,20 +289,40 @@
         div.textContent = day;
         div.onclick = () => openModal(dateStr);
 
-        /* --- NYT: fremhæv dagens dato med lysegrøn skrift/kant --- */
+        // Fremhæv dagens dato
         if (isToday(year, month, day)) {
           div.classList.add('today');
         }
 
         const saved = JSON.parse(localStorage.getItem(dateStr) || '{}');
-        if (saved.note) {
-          const note = document.createElement('div');
-          note.className = 'note';
-          note.textContent = saved.note;
-          div.appendChild(note);
-        }
-        if (saved.color) {
+
+        // --- Bruger din viewer-linje med normalizeId:
+        const viewer = normalizeId(currentUserInput.value || '');
+
+        // Badge for synlighed (vises altid)
+        const badge = document.createElement('div');
+        badge.className = 'vis-badge';
+        badge.textContent = saved.visibility ? visLabel(saved.visibility) : '—';
+        div.appendChild(badge);
+
+        // Farve vises kun hvis seer har adgang
+        if (saved.color && canView(saved, viewer)) {
           div.classList.add(saved.color);
+        }
+
+        // Note vises kun hvis seer har adgang
+        if (saved.note) {
+          if (canView(saved, viewer)) {
+            const note = document.createElement('div');
+            note.className = 'note';
+            note.textContent = saved.note;
+            div.appendChild(note);
+          } else {
+            const hidden = document.createElement('div');
+            hidden.className = 'hidden-note';
+            hidden.textContent = 'Note skjult';
+            div.appendChild(hidden);
+          }
         }
 
         calendar.appendChild(div);
@@ -257,6 +347,8 @@
       modalDate.textContent = `Note for ${dateStr}`;
       noteInput.value = saved.note || '';
       colorInput.value = saved.color || '';
+      visibilityInput.value = saved.visibility || 'public';
+      viewersInput.value = (saved.viewers || []).join(', ');
       modal.style.display = 'block';
       overlay.style.display = 'block';
     }
@@ -264,7 +356,11 @@
     function saveNote() {
       const note = noteInput.value;
       const color = colorInput.value;
-      localStorage.setItem(selectedDate, JSON.stringify({ note, color }));
+      const visibility = visibilityInput.value;
+      const owner = resolveOwner();
+      const viewers = parseViewers(viewersInput.value);
+
+      localStorage.setItem(selectedDate, JSON.stringify({ note, color, visibility, viewers, owner }));
       modal.style.display = 'none';
       overlay.style.display = 'none';
       generateCalendar(currentYear, currentMonth);
@@ -275,7 +371,9 @@
       overlay.style.display = 'none';
     };
 
-    /* --- NYT: Hjælpefunktion til at afgøre om en celle er "i dag" --- */
+    // --- Hjælpefunktioner ---
+
+    // Dagens dato?
     function isToday(year, monthZeroBased, day) {
       const today = new Date();
       return (
@@ -285,7 +383,7 @@
       );
     }
 
-    /* --- NYT: Opdater automatisk ved midnat, så markeringen flytter sig --- */
+    // Opdater ved midnat (så "i dag" flytter sig)
     function scheduleMidnightRefresh() {
       const now = new Date();
       const tomorrow = new Date(now);
@@ -293,13 +391,63 @@
       tomorrow.setHours(0, 0, 0, 0);
       const msToMidnight = tomorrow - now;
       setTimeout(() => {
-        // hvis brugeren står på en anden måned end den aktuelle, vil "today" først være synlig ved navigation
         generateCalendar(currentYear, currentMonth);
-        scheduleMidnightRefresh(); // planlæg næste opdatering
+        scheduleMidnightRefresh();
       }, msToMidnight);
     }
 
-    // Initial rendering og start midnats-opdatering
+    // Synlighedstekst
+    function visLabel(v) {
+      if (v === 'public') return 'Offentlig';
+      if (v === 'private') return 'Privat';
+      if (v === 'custom') return 'Tilpasset';
+      return '—';
+    }
+
+    // --- NORMALISERING & ADGANGSKONTROL (DINE STYKKER INDSAT) ---
+
+    function normalizeId(x) {
+      return String(x || '')
+        .replace(/\u00A0/g, ' ')      // NBSP -> almindeligt space
+        .replace(/\s+/g, ' ')         // kollaps whitespace
+        .trim()
+        .toLowerCase();
+    }
+
+    function parseViewers(text) {
+      return (text || '')
+        .split(',')
+        .map(s => s.replace(/\u00A0/g, ' ')) // NBSP -> space
+        .map(s => s.trim())
+        .filter(Boolean)
+        .map(normalizeId);
+    }
+
+    function resolveOwner() {
+      return normalizeId(currentUserInput.value || 'Ejer');
+    }
+
+    function eqId(a, b) {
+      return normalizeId(a) === normalizeId(b);
+    }
+
+    function canView(saved, viewer) {
+      if (!saved) return false;
+      const v = saved.visibility || 'public';
+      if (!viewer) return v === 'public';
+
+      if (v === 'public') return true;
+      if (v === 'private') return eqId(saved.owner, viewer);
+
+      if (v === 'custom') {
+        const list = (saved.viewers || []).map(normalizeId);
+        return eqId(saved.owner, viewer) || list.includes(normalizeId(viewer));
+      }
+      return false;
+    }
+
+    // Init + render + natlig opdatering
+    initCurrentUser();
     generateCalendar(currentYear, currentMonth);
     scheduleMidnightRefresh();
   </script>
